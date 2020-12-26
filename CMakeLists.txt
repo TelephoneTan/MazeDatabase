@@ -31,24 +31,24 @@ add_executable (MazeDatabase "MazeDatabase.cpp" "User.cpp" "User.h" "Record.h" "
 ## 链接额外的静态库和动态库
 ## 依赖关系（如果有）要满足：前面的库依赖后面的库
 ## 末尾要恢复动态链接
-#target_link_libraries(MazeDatabase PRIVATE -Wl,-Bdynamic pthread stdc++ mysql -Wl,-Bstatic m -Wl,-Bdynamic)
+#target_link_libraries(MazeDatabase PRIVATE -Wl,-Bdynamic pthread stdc++ sqlite3 -Wl,-Bstatic m -Wl,-Bdynamic)
 #
 ## 强制所有库链接使用静态库
 ## target_link_libraries(MazeDatabase PRIVATE -static)
 
 # MSVC =====================================================================================================
 
-# 链接时寻找MySQL库的路径，视具体环境而定
+# 链接时寻找SQLite库的路径，视具体环境而定
 # 设置此路径之后，只能保证链接成功
-# 一般在 Windows 中，程序运行时仍需要将MySQL动态库存放在系统指定目录或程序的统一目录下，除非使用静态链接库
-target_link_directories(MazeDatabase PRIVATE "C:\\Program Files\\MySQL\\MySQL Router 8.0\\lib\\")
+# 一般在 Windows 中，程序运行时仍需要将SQLite动态库存放在系统指定目录或程序的统一目录下，除非使用静态链接库
+target_link_directories(MazeDatabase PRIVATE "D:\\sqlite\\")
 
-# 动态链接MySQL库
-target_link_libraries(MazeDatabase libmysql)
+# 动态链接SQLite库
+target_link_libraries(MazeDatabase sqlite3)
 
 # ==========================================================================================================
 
 # include路径，视平台与环境而定，一般在 Linux 中可不加此句
-target_include_directories(MazeDatabase PRIVATE "C:\\Program Files\\MySQL\\MySQL Server 8.0\\include\\")
+target_include_directories(MazeDatabase PRIVATE "D:\\sqlite\\")
 
 # TODO: 如有需要，请添加测试并安装目标。

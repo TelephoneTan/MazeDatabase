@@ -5,25 +5,11 @@
 #include "Database.h"
 #include "Log.h"
 
-Database::Database(const std::string &host, const std::string &username, const std::string &pwd,
-                   const std::string &dbName, unsigned int port_or_0_if_default, const std::string &charset) : host(host),
-                                                                                                               username(username),
-                                                                                                               pwd(pwd),
-                                                                                                               db_name(dbName),
-                                                                                                               port(port_or_0_if_default),
-                                                                                                               charset(charset) {
-    if (con){
-        Log::log("database init success");
-        if (mysql_real_connect(con, host.c_str(), username.c_str(), pwd.c_str(), db_name.c_str(), port_or_0_if_default, nullptr, 0)){
-            Log::log("database connected");
-            // set the charset
-            Log::log("set connection charset to " + charset + " ...");
-            mysql_query(con, std::string("set names ").append(charset).c_str());
-        } else{
-            Log::log("unable to connect database");
-        }
+Database::Database(const std::string &dbFilePath) : db_file_path(dbFilePath) {
+    if (sqlite3_open(db_file_path.c_str(), &con) != 0){
+        Log::log("unable to open database");
     } else{
-        Log::log("database init fail");
+        Log::log("open database success");
     }
 }
 
@@ -75,26 +61,7 @@ void Database::restore(std::string &text, bool isLike) {
     findAndReplaceAll_reverse(text, "\\", "\\\\");
 }
 
-std::vector<std::vector<std::string>> Database::get_select_all_result(MYSQL *con) {
-    MYSQL_RES *sql_res = mysql_store_result(con);
-    unsigned int column_num = mysql_num_fields(sql_res);
-    unsigned int row_num = mysql_num_rows(sql_res);
-    std::vector<std::vector<std::string>> res;
-    res.reserve(row_num);
-    for (int i = 0; i < row_num; ++i) {
-        MYSQL_ROW row_pointer = mysql_fetch_row(sql_res);
-        std::vector<std::string> row_str;
-        row_str.reserve(column_num);
-        for (int column_index = 0; column_index < column_num; ++column_index) {
-            row_str.emplace_back(row_pointer[column_index]);
-        }
-        res.emplace_back(std::move(row_str));
-    }
-    mysql_free_result(sql_res);
-    return std::move(res);
-}
-
-boolean Database::add_user(const User &user) {
+bool Database::add_user(const User &user) {
     std::string NAME("add_user()");
 
     std::string sno(user.getSno());
@@ -103,22 +70,29 @@ boolean Database::add_user(const User &user) {
     escape(sno, false);
     escape(name, false);
 
-    std::string count_sql("select * from user");
+    std::string count_sql("select * from user where sno='" + sno + "'");
 
-    mysql_query(con, count_sql.c_str());
+    char *error_msg = nullptr;
 
-    MYSQL_RES *sql_res = mysql_store_result(con);
-    int count_aka_next_index = mysql_num_rows(sql_res);
-    mysql_free_result(sql_res);
+    int count_aka_next_index = 0;
+    if (sqlite3_exec(con, count_sql.c_str(), (sqlite3_callback)sqlite_fill_rows_num_callback, &count_aka_next_index, &error_msg) != SQLITE_OK){
+        Log::log(NAME, error_msg);
+        sqlite3_free(error_msg);
+    }
 
-    mysql_query(con, ("insert into user (sno, name) values ('" + sno + "', '" + name + "')").c_str());
-    mysql_query(con, count_sql.c_str());
+    if (sqlite3_exec(con, ("insert into user (sno, name) values ('" + sno + "', '" + name + "')").c_str(), nullptr,
+                     nullptr, &error_msg) != SQLITE_OK){
+        Log::log(NAME, error_msg);
+        sqlite3_free(error_msg);
+    }
 
-    sql_res = mysql_store_result(con);
-    int count_after_insert = mysql_num_rows(sql_res);
-    mysql_free_result(sql_res);
+    int count_after_insert = 0;
+    if (sqlite3_exec(con, count_sql.c_str(), (sqlite3_callback)sqlite_fill_rows_num_callback, &count_after_insert, &error_msg) != SQLITE_OK){
+        Log::log(NAME, error_msg);
+        sqlite3_free(error_msg);
+    }
 
-    boolean res = (count_after_insert > count_aka_next_index);
+    bool res = (count_after_insert > count_aka_next_index);
 
     restore(sno, false);
     restore(name, false);
@@ -127,12 +101,18 @@ boolean Database::add_user(const User &user) {
 }
 
 std::vector<std::vector<std::string>> Database::select_all_users() {
+    std::string NAME("select_all_users()");
     std::string sql("select * from user");
-    mysql_query(con, sql.c_str());
-    return get_select_all_result(con);
+    char *errmsg = nullptr;
+    std::vector<std::vector<std::string>> res;
+    if (sqlite3_exec(con, sql.c_str(), (sqlite3_callback)sqlite_fill_data_callback, &res, &errmsg) != SQLITE_OK){
+        Log::log(NAME, errmsg);
+        sqlite3_free(errmsg);
+    }
+    return std::move(res);
 }
 
-boolean Database::delete_user(const std::string &sno) {
+bool Database::delete_user(const std::string &sno) {
     std::string NAME("delete_user()");
 
     std::string sno_e(sno);
@@ -140,32 +120,35 @@ boolean Database::delete_user(const std::string &sno) {
 
     std::string count_sql = std::string("select * from user where sno='") + sno_e + "'";
 
+    char *errmsg = nullptr;
+
     std::string sql = count_sql;
-
-    mysql_query(con, sql.c_str());
-
-    MYSQL_RES *sql_res;
-    sql_res = mysql_store_result(con);
-    unsigned int num_before = mysql_num_rows(sql_res);
-    mysql_free_result(sql_res);
+    int num_before = 0;
+    if (sqlite3_exec(con, sql.c_str(), (sqlite3_callback)sqlite_fill_rows_num_callback, &num_before, &errmsg) != SQLITE_OK){
+        Log::log(NAME, errmsg);
+        sqlite3_free(errmsg);
+    }
 
     sql = std::string("delete from user where sno='") + sno_e + "'";
-    mysql_query(con, sql.c_str());
+    if (sqlite3_exec(con, sql.c_str(), nullptr, nullptr, &errmsg) != SQLITE_OK){
+        Log::log(NAME, errmsg);
+        sqlite3_free(errmsg);
+    }
 
     sql = count_sql;
-    mysql_query(con, sql.c_str());
+    int num_after = 0;
+    if (sqlite3_exec(con, sql.c_str(), (sqlite3_callback)sqlite_fill_rows_num_callback, &num_after, &errmsg) != SQLITE_OK){
+        Log::log(NAME, errmsg);
+        sqlite3_free(errmsg);
+    }
 
-    sql_res = mysql_store_result(con);
-    unsigned int num_after = mysql_num_rows(sql_res);
-    mysql_free_result(sql_res);
-
-    boolean res = (num_before > num_after);
+    bool res = (num_before > num_after);
 
     Log::log(NAME, "delete user " + sno + " " + ( (res)?("success"):("fail") ) );
     return res;
 }
 
-boolean Database::add_record(const Record &record) {
+bool Database::add_record(const Record &record) {
     std::string NAME("add_record()");
 
     std::string sno(record.getSno());
@@ -180,23 +163,28 @@ boolean Database::add_record(const Record &record) {
 
     std::string count_sql = std::string("select * from record where sno='") + sno + "' and level=" + level;
 
-    mysql_query(con, count_sql.c_str());
+    char *error_msg = nullptr;
 
-    MYSQL_RES *sql_res = mysql_store_result(con);
-    int count_aka_next_index = mysql_num_rows(sql_res);
-    mysql_free_result(sql_res);
+    int count_aka_next_index = 0;
+    if (sqlite3_exec(con, count_sql.c_str(), (sqlite3_callback)sqlite_fill_rows_num_callback, &count_aka_next_index, &error_msg) != SQLITE_OK){
+        Log::log(NAME, error_msg);
+        sqlite3_free(error_msg);
+    }
 
     std::string insert_sql = "insert into record (sno, level, idx, time_cost_s, score) values ('" + sno + "', " + level + ", " + std::to_string(count_aka_next_index) + ", " + time_cost_s + ", " + score + ")";
 
-    mysql_query(con, insert_sql.c_str());
+    if (sqlite3_exec(con, insert_sql.c_str(), nullptr, nullptr, &error_msg) != SQLITE_OK){
+        Log::log(NAME, error_msg);
+        sqlite3_free(error_msg);
+    }
 
-    mysql_query(con, count_sql.c_str());
+    int count_after_insert = 0;
+    if (sqlite3_exec(con, count_sql.c_str(), (sqlite3_callback)sqlite_fill_rows_num_callback, &count_after_insert, &error_msg) != SQLITE_OK){
+        Log::log(NAME, error_msg);
+        sqlite3_free(error_msg);
+    }
 
-    sql_res = mysql_store_result(con);
-    int count_after_insert = mysql_num_rows(sql_res);
-    mysql_free_result(sql_res);
-
-    boolean res = (count_after_insert > count_aka_next_index);
+    bool res = (count_after_insert > count_aka_next_index);
 
     restore(sno, false);
     restore(level, false);
@@ -207,12 +195,18 @@ boolean Database::add_record(const Record &record) {
 }
 
 std::vector<std::vector<std::string>> Database::select_all_records() {
+    std::string NAME("select_all_records()");
     std::string sql("select * from record");
-    mysql_query(con, sql.c_str());
-    return get_select_all_result(con);
+    char *errmsg = nullptr;
+    std::vector<std::vector<std::string>> res;
+    if (sqlite3_exec(con, sql.c_str(), (sqlite3_callback)sqlite_fill_data_callback, &res, &errmsg) != SQLITE_OK){
+        Log::log(NAME, errmsg);
+        sqlite3_free(errmsg);
+    }
+    return std::move(res);
 }
 
-boolean Database::delete_record(const std::string &sno, const int &level, const int &index) {
+bool Database::delete_record(const std::string &sno, const int &level, const int &index) {
     std::string NAME("delete_record()");
 
     std::string sno_e(sno);
@@ -224,34 +218,74 @@ boolean Database::delete_record(const std::string &sno, const int &level, const 
 
     std::string count_sql = std::string("select * from record where sno='") + sno_e + "' and level=" + level_e + " and idx=" + index_e;
 
+    char *errmsg = nullptr;
+
     std::string sql = count_sql;
-
-    mysql_query(con, sql.c_str());
-
-    MYSQL_RES *sql_res;
-    sql_res = mysql_store_result(con);
-    unsigned int num_before = mysql_num_rows(sql_res);
-    mysql_free_result(sql_res);
+    int num_before = 0;
+    if (sqlite3_exec(con, sql.c_str(), (sqlite3_callback)sqlite_fill_rows_num_callback, &num_before, &errmsg) != SQLITE_OK){
+        Log::log(NAME, errmsg);
+        sqlite3_free(errmsg);
+    }
 
     sql = std::string("delete from record where sno='") + sno_e + "' and level=" + level_e + " and idx=" + index_e;
-    mysql_query(con, sql.c_str());
+    if (sqlite3_exec(con, sql.c_str(), nullptr, nullptr, &errmsg) != SQLITE_OK){
+        Log::log(NAME, errmsg);
+        sqlite3_free(errmsg);
+    }
 
     sql = count_sql;
-    mysql_query(con, sql.c_str());
+    int num_after = 0;
+    if (sqlite3_exec(con, sql.c_str(), (sqlite3_callback)sqlite_fill_rows_num_callback, &num_after, &errmsg) != SQLITE_OK){
+        Log::log(NAME, errmsg);
+        sqlite3_free(errmsg);
+    }
 
-    sql_res = mysql_store_result(con);
-    unsigned int num_after = mysql_num_rows(sql_res);
-    mysql_free_result(sql_res);
-
-    boolean res = (num_before > num_after);
+    bool res = (num_before > num_after);
 
     Log::log(NAME, "delete record { sno: " + sno + ", level: " + std::to_string(level) + ", index: " + std::to_string(index) + " } " + ( (res)?("success"):("fail") ) );
 
-    if (res){
-        std::string update_idx_sql = "update record set idx=idx-1 where idx>" + index_e;
-        mysql_query(con, update_idx_sql.c_str());
+    // Error prone.
+
+    if (res) {
+        std::string count_level_sql = "select * from record where sno='" + sno_e + "' and level=" + level_e;
+        int level_row_num = 0;
+        if (sqlite3_exec(con, count_level_sql.c_str(), (sqlite3_callback)sqlite_fill_rows_num_callback, &level_row_num, &errmsg) != SQLITE_OK){
+            Log::log(NAME, errmsg);
+            sqlite3_free(errmsg);
+        }
+        for (int i = index + 1; i <= level_row_num; ++i) {
+            std::string update_idx_sql = std::string()
+                    .append("update record set idx=idx-1 where idx=").append(std::to_string(i))
+                    .append(" and sno ='").append(sno_e).append("'")
+                    .append(" and level=").append(level_e);
+            if (sqlite3_exec(con, update_idx_sql.c_str(), nullptr, nullptr, &errmsg) != SQLITE_OK){
+                Log::log(NAME, errmsg);
+                sqlite3_free(errmsg);
+            }
+        }
     }
 
     return res;
+}
+
+int Database::sqlite_fill_data_callback(std::vector<std::vector<std::string>> *data_to_fill, int fields_num, char **field_values,
+                                        char **field_names) {
+    auto &res = *data_to_fill;
+    std::vector<std::string> a_row;
+    a_row.reserve(fields_num);
+    for (int column_index = 0; column_index < fields_num; ++column_index) {
+        a_row.emplace_back(field_values[column_index]);
+    }
+    res.emplace_back(std::move(a_row));
+    return 0;
+}
+
+int Database::sqlite_fill_rows_num_callback(int *row_num_to_fill, int fields_num, char **field_values, char **field_names) {
+    (*row_num_to_fill)++;
+    return 0;
+}
+
+Database::~Database() {
+    sqlite3_close(con);
 }
 

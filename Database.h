@@ -5,7 +5,7 @@
 #ifndef MAZEDATABASE_DATABASE_H
 #define MAZEDATABASE_DATABASE_H
 
-#include <mysql.h>
+#include <sqlite3.h>
 #include <string>
 #include <vector>
 
@@ -13,33 +13,30 @@
 #include "Record.h"
 
 class Database {
-    MYSQL* con = mysql_init(nullptr);
-    std::string host;
-    std::string username;
-    std::string pwd;
-    std::string db_name;
-    unsigned int port;
-    std::string charset;
+    sqlite3 *con = nullptr;
+    std::string db_file_path;
 public:
     constexpr static const char * const utf8 = "utf8";
     constexpr static const char * const gbk = "gbk";
 
-    Database(const std::string &host, const std::string &username, const std::string &pwd, const std::string &dbName,
-             unsigned int port_or_0_if_default, const std::string &charset);
+    Database(const std::string &dbFilePath);
 
-    boolean add_user(const User &user);
-    boolean add_record(const Record &record);
+    virtual ~Database();
+
+    bool add_user(const User &user);
+    bool add_record(const Record &record);
     std::vector<std::vector<std::string>> select_all_users();
     std::vector<std::vector<std::string>> select_all_records();
-    boolean delete_user(const std::string &sno);
-    boolean delete_record(const std::string &sno, const int &level, const int &index);
+    bool delete_user(const std::string &sno);
+    bool delete_record(const std::string &sno, const int &level, const int &index);
 
 private:
     static void findAndReplaceAll(std::string &data, const std::string &toSearch, const std::string &replaceStr);
     static void findAndReplaceAll_reverse(std::string &data, const std::string &replaceStr, const std::string &toSearch);
     static void escape(std::string &text, bool isLike);
     static void restore(std::string &text, bool isLike);
-    static std::vector<std::vector<std::string>> get_select_all_result(MYSQL *con);
+    static int sqlite_fill_data_callback(std::vector<std::vector<std::string>> *data_to_fill, int fields_num, char **field_values, char **field_names);
+    static int sqlite_fill_rows_num_callback(int *row_num_to_fill, int fields_num, char **field_values, char **field_names);
 };
 
 

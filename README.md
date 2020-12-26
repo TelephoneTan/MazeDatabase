@@ -1,0 +1,10 @@
+## 编译
+- 编译此项目需要链接SQLite动态库并包含SQLite头文件，详细信息可以参照`/CMakeLists.txt`。
+## 示例
+- `/MazeDatabase.cpp`包含主函数，作示例用。
+## 建立数据库
+- 需要先建立数据库文件和相关的数据表才能正常使用，建库、建表语句可以参照`/prepare_mysql.txt`。
+- 当然，也可以使用预先建立的数据库文件`/precompiled/maze.db`。
+## 资源
+- `/precompiled/`目录下有预先建立好的数据库文件`maze.db`，也有在**amd64**平台上预先编译好的项目可执行文件`MazeDatabase.exe`。
+- 在`/sqlite/`目录下有SQLite可执行文件`sqlite3.exe`，也有SQLite头文件`sqlite3.h`，还有在**amd64**平台上预先编译好的SQLite动态库文件`sqlite3.lib`。

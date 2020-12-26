@@ -9,3 +9,14 @@ create table user ( sno char(50), name char(50) not null default '同学', dt da
 
 // 创建记录数据表
 create table record ( sno char(50), level int default 1, idx int default 0, time_cost_s int not null default 0, score int not null default 100, dt datetime not null default current_timestamp, primary key (sno, level, idx) ) default charset=utf8;
+
+// =============================== For SQLite ===============================
+
+// 创建数据库
+sqlite3 maze.db;
+
+// 创建用户数据表，使用本地时间
+create table user ( sno char(50), name char(50) not null default '同学', dt datetime not null default (datetime('now','localtime')), primary key (sno) );
+
+// 创建记录数据表，使用本地时间
+create table record ( sno char(50), level int default 1, idx int default 0, time_cost_s int not null default 0, score int not null default 100, dt datetime not null default (datetime('now','localtime')), primary key (sno, level, idx) );
