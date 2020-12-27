@@ -1,10 +1,18 @@
 ## 编译
-- 编译此项目需要链接SQLite动态库并包含SQLite头文件，详细信息可以参照`/CMakeLists.txt`。
+- 编译此项目需要链接SQLite库并包含SQLite头文件，详细信息可以参照`/CMakeLists.txt`。
 ## 示例
 - `/MazeDatabase.cpp`包含主函数，作示例用。
 ## 建立数据库
 - 需要先建立数据库文件和相关的数据表才能正常使用，建库、建表语句可以参照`/prepare_mysql.txt`。
 - 当然，也可以使用预先建立的数据库文件`/precompiled/maze.db`。
+## 运行
+- 如果链接SQLite库时使用的是动态链接，则在**Windows**中，项目可执行文件的同一目录中必须存在相应的.dll文件，否则可能无法正常运行。
 ## 资源
-- `/precompiled/`目录下有预先建立好的数据库文件`maze.db`，也有在**amd64**平台上预先编译好的项目可执行文件`MazeDatabase.exe`。
-- 在`/sqlite/`目录下有SQLite可执行文件`sqlite3.exe`，也有SQLite头文件`sqlite3.h`，还有在**amd64**平台上预先编译好的SQLite动态库文件`sqlite3.lib`。
+- `/precompiled/`目录下有：
+  + 预先建立好的数据库文件`maze.db`
+  + 在**amd64**平台上（使用动态库链接）预先编译好的项目可执行文件`MazeDatabase.exe`
+- 在`/sqlite/`目录下有：
+  + SQLite可执行文件`sqlite3.exe`（x86）
+  + SQLite头文件`sqlite3.h`
+  + SQLite动态库DLL文件`sqlite3.dll`（x64）
+  + 在**amd64**平台上预先生成的SQLite导入库文件`sqlite3.lib`（x64）
